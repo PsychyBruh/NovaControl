@@ -25,7 +25,7 @@ A real-time **multimodal desktop controller** that fuses **hand gestures + eye d
 
 ## Repo Structure
 ```
-multimodal-ai-control/
+NovaControl/
   core/        # event bus, config, main orchestration
   vision/      # hand tracker, gaze tracker
   audio/       # speech capture + ASR
