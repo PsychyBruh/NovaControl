@@ -46,7 +46,8 @@ class GazeTracker:
         self._ratio_ema: Optional[float] = None
         self._y_ema: Optional[float] = None
         self._no_face_frames = 0
-        self._auto_stretch = True
+        # Adaptive stretch is optional; keep raw ratios for calibrated mapping.
+        self._auto_stretch = False
         self._stretch_decay = 0.995
         self._min_span = 0.1
         self._range_min = [0.25, 0.25]

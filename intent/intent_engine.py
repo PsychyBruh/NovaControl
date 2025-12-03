@@ -9,6 +9,7 @@ from actions.mouse_controller import MouseController
 from actions.safety_guard import SafetyGuard
 from core.config import AppConfig
 from core.event_bus import Event, EventBus
+from vision.screen_gaze_mapper import ScreenGazeMapper
 
 
 class IntentEngine:
@@ -36,6 +37,7 @@ class IntentEngine:
         self._fist_start_ts: Optional[float] = None
         self.control_mode: str = "EYE"  # "EYE" or "HAND"
         self._last_gaze_y: float = 0.5
+        self._gaze_mapper = ScreenGazeMapper()
 
     async def start(self) -> None:
         self._task = asyncio.create_task(self._run())
@@ -128,6 +130,8 @@ class IntentEngine:
             return
         x = float(ratio)
         y = float(y_ratio) if y_ratio is not None else self._last_gaze_y
+        if self._gaze_mapper and self._gaze_mapper.available():
+            x, y = self._gaze_mapper.map(x, y)
         self._emit_intent(
             "CURSOR_MOVE",
             event.confidence,
