@@ -6,5 +6,5 @@ pynput
 # Optional voice
 faster-whisper
 sounddevice
-webrtcvad
+# webrtcvad
 

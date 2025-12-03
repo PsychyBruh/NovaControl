@@ -44,7 +44,13 @@ class GazeTracker:
             min_tracking_confidence=0.6,
         )
         self._ratio_ema: Optional[float] = None
+        self._y_ema: Optional[float] = None
         self._no_face_frames = 0
+        self._auto_stretch = True
+        self._stretch_decay = 0.995
+        self._min_span = 0.1
+        self._range_min = [0.25, 0.25]
+        self._range_max = [0.75, 0.75]
 
     def process(self, frame_bgr) -> GazeResult:
         start_ts = time.time()
@@ -64,7 +70,10 @@ class GazeTracker:
         if ratio is None:
             return GazeResult("NONE", 0.0, None, landmarks)
 
+        ratio, vertical = self._stretch(ratio, vertical)
+
         smoothed_ratio = self._smooth_ratio(ratio)
+        smoothed_y = self._smooth_y(vertical if vertical is not None else 0.5)
         direction, confidence = self._direction_from_ratio(smoothed_ratio)
         self._publish(
             Event(
@@ -72,7 +81,7 @@ class GazeTracker:
                 type="gaze",
                 name=direction,
                 confidence=confidence,
-                meta={"ratio": smoothed_ratio, "y_ratio": vertical},
+                meta={"ratio": smoothed_ratio, "y_ratio": smoothed_y},
             )
         )
         return GazeResult(direction, confidence, smoothed_ratio, landmarks)
@@ -133,12 +142,42 @@ class GazeTracker:
             self._ratio_ema = self._ratio_ema * (1 - self.alpha) + ratio * self.alpha
         return self._ratio_ema
 
+    def _smooth_y(self, ratio: float) -> float:
+        if self._y_ema is None:
+            self._y_ema = ratio
+        else:
+            self._y_ema = self._y_ema * (1 - self.alpha) + ratio * self.alpha
+        return self._y_ema
+
     def _direction_from_ratio(self, ratio: float) -> Tuple[str, float]:
         if ratio < 0.4:
             return "LEFT", 1.0 - ratio
         if ratio > 0.6:
             return "RIGHT", ratio
         return "CENTER", 1.0 - abs(ratio - 0.5) * 2
+
+    def _stretch(self, x: float, y: Optional[float]) -> Tuple[float, Optional[float]]:
+        if not self._auto_stretch:
+            return x, y
+        if y is None:
+            y = 0.5
+        decay = self._stretch_decay
+        self._range_min[0] = min(self._range_min[0], x)
+        self._range_min[1] = min(self._range_min[1], y)
+        self._range_max[0] = max(self._range_max[0], x)
+        self._range_max[1] = max(self._range_max[1], y)
+
+        self._range_min[0] = self._range_min[0] * decay + x * (1 - decay)
+        self._range_min[1] = self._range_min[1] * decay + y * (1 - decay)
+        self._range_max[0] = self._range_max[0] * decay + x * (1 - decay)
+        self._range_max[1] = self._range_max[1] * decay + y * (1 - decay)
+
+        span_x = max(self._min_span, self._range_max[0] - self._range_min[0])
+        span_y = max(self._min_span, self._range_max[1] - self._range_min[1])
+
+        norm_x = float(np.clip((x - self._range_min[0]) / span_x, 0.0, 1.0))
+        norm_y = float(np.clip((y - self._range_min[1]) / span_y, 0.0, 1.0))
+        return norm_x, norm_y
 
     def _publish(self, event: Event) -> None:
         if self.bus is None:
