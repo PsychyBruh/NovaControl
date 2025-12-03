@@ -1,0 +1,10 @@
+opencv-python
+mediapipe
+numpy
+pynput
+
+# Optional voice
+faster-whisper
+sounddevice
+webrtcvad
+
