@@ -4,6 +4,7 @@ import asyncio
 import logging
 import signal
 import time
+import threading
 from typing import Optional
 
 from core.config import AppConfig, KeyboardConfig, load_config
@@ -99,6 +100,7 @@ class Orchestrator:
         self.hand_tracker: Optional[HandTracker] = None
         self.gaze_tracker: Optional[GazeTracker] = None
         self.status_overlay: Optional[StatusOverlay] = None
+        self._overlay_stop = threading.Event()
 
     def request_shutdown(self) -> None:
         self._shutdown.set()
@@ -139,6 +141,7 @@ class Orchestrator:
 
     async def stop(self) -> None:
         self.keyboard_hook.stop()
+        self._overlay_stop.set()
         for task in self._tasks:
             task.cancel()
         await asyncio.gather(*self._tasks, return_exceptions=True)
@@ -165,7 +168,7 @@ class Orchestrator:
             bus=self.bus,
         )
         try:
-            overlay.run()
+            overlay.run(stop_event=self._overlay_stop)
         except Exception as exc:
             logging.error("Overlay exited with error: %s", exc)
 

@@ -15,16 +15,22 @@ except ImportError:
 class MouseController:
     """Thin wrapper over pynput mouse control with basic helpers."""
 
-    def __init__(self, calibration: Optional[dict] = None, calibration_path: str = "scripts/workspace_calibration.json") -> None:
+    def __init__(
+        self,
+        calibration: Optional[dict] = None,
+        calibration_path: str = "scripts/workspace_calibration.json",
+        gaze_calibration_path: str = "scripts/gaze_calibration.json",
+    ) -> None:
         self._mouse = mouse.Controller() if mouse else None
         self._dragging = False
         self._calibration = calibration or self._load_calibration(calibration_path)
+        self._gaze_calibration = self._load_calibration(gaze_calibration_path)
 
-    def move_absolute_norm(self, x_norm: float, y_norm: float) -> None:
+    def move_absolute_norm(self, x_norm: float, y_norm: float, source: Optional[str] = None) -> None:
         if not self._mouse:
             return
 
-        x_norm, y_norm = self._apply_calibration(x_norm, y_norm)
+        x_norm, y_norm = self._apply_calibration(x_norm, y_norm, source)
 
         size = self._screen_size()
         if not size:
@@ -102,24 +108,33 @@ class MouseController:
         # Fallback: try to get current position and assume 1920x1080
         return (1920, 1080)
 
-    def _apply_calibration(self, x_norm: float, y_norm: float) -> Tuple[float, float]:
+    def _apply_calibration(self, x_norm: float, y_norm: float, source: Optional[str]) -> Tuple[float, float]:
         x_norm = self._clamp01(x_norm)
         y_norm = self._clamp01(y_norm)
-        if not self._calibration:
-            return x_norm, y_norm
-        try:
-            min_x = float(self._calibration["min_x"])
-            max_x = float(self._calibration["max_x"])
-            min_y = float(self._calibration["min_y"])
-            max_y = float(self._calibration["max_y"])
-        except Exception:
-            return x_norm, y_norm
 
-        span_x = max(1e-6, max_x - min_x)
-        span_y = max(1e-6, max_y - min_y)
-        adj_x = self._clamp01((x_norm - min_x) / span_x)
-        adj_y = self._clamp01((y_norm - min_y) / span_y)
-        return adj_x, adj_y
+        # Apply gaze center calibration only for gaze moves.
+        if source == "gaze" and self._gaze_calibration:
+            try:
+                center = float(self._gaze_calibration.get("center_ratio", 0.5))
+                x_norm = self._clamp01(x_norm - center + 0.5)
+            except Exception:
+                pass
+
+        # Apply workspace calibration if present (for hand)
+        if self._calibration:
+            try:
+                min_x = float(self._calibration["min_x"])
+                max_x = float(self._calibration["max_x"])
+                min_y = float(self._calibration["min_y"])
+                max_y = float(self._calibration["max_y"])
+                span_x = max(1e-6, max_x - min_x)
+                span_y = max(1e-6, max_y - min_y)
+                x_norm = self._clamp01((x_norm - min_x) / span_x)
+                y_norm = self._clamp01((y_norm - min_y) / span_y)
+            except Exception:
+                pass
+
+        return x_norm, y_norm
 
     def _load_calibration(self, path: str) -> Optional[dict]:
         p = Path(path)

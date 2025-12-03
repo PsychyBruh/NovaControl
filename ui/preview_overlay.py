@@ -55,7 +55,7 @@ class PreviewOverlay:
     def set_intent(self, intent: str) -> None:
         self.state.intent = intent
 
-    def run(self, camera_index: int | None = None) -> None:
+    def run(self, camera_index: int | None = None, stop_event: Optional["threading.Event"] = None) -> None:
         cam_idx = self.config.camera_index if camera_index is None else camera_index
         cap = self._open_camera(cam_idx)
         if cap is None:
@@ -67,6 +67,8 @@ class PreviewOverlay:
 
         try:
             while True:
+                if stop_event and stop_event.is_set():
+                    break
                 ts = time.time()
                 ok, frame = cap.read()
                 if not ok:

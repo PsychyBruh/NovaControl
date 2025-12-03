@@ -16,15 +16,49 @@ import cv2
 from vision.gaze_tracker import GazeTracker
 
 
-def calibrate(duration: float, camera_index: int, output: Path) -> None:
+def scan_cameras(max_index: int = 5) -> list[int]:
+    available = []
+    for idx in range(max_index + 1):
+        cap = cv2.VideoCapture(idx)
+        if cap.isOpened():
+            ok, _ = cap.read()
+            if ok:
+                available.append(idx)
+            cap.release()
+    return available
+
+
+def open_camera(preferred: int | None) -> cv2.VideoCapture:
+    if preferred is not None:
+        cap = cv2.VideoCapture(preferred)
+        if cap.isOpened():
+            return cap
+
+    available = scan_cameras()
+    if not available:
+        print("No cameras detected.", file=sys.stderr)
+        sys.exit(1)
+
+    chosen = available[0]
+    try:
+        choice = input(f"Select camera from {available} (default {chosen}): ").strip()
+        if choice:
+            chosen = int(choice)
+    except Exception:
+        pass
+
+    cap = cv2.VideoCapture(chosen)
+    if not cap.isOpened():
+        print(f"Could not open camera {chosen}", file=sys.stderr)
+        sys.exit(1)
+    return cap
+
+
+def calibrate(duration: float, camera_index: int | None, output: Path) -> None:
     tracker = GazeTracker(bus=None)
-    cap = cv2.VideoCapture(camera_index)
+    cap = open_camera(camera_index)
     ratios = []
     start = time.time()
-
-    if not cap.isOpened():
-        print("Could not open camera.", file=sys.stderr)
-        sys.exit(1)
 
     try:
         while time.time() - start < duration:
@@ -67,7 +101,7 @@ def calibrate(duration: float, camera_index: int, output: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Calibrate gaze center using FaceMesh iris landmarks.")
     parser.add_argument("--duration", type=float, default=3.0, help="Seconds to sample gaze.")
-    parser.add_argument("--camera", type=int, default=0, help="Camera index.")
+    parser.add_argument("--camera", type=int, default=None, help="Camera index (optional, will prompt if not set).")
     parser.add_argument(
         "--output",
         type=Path,

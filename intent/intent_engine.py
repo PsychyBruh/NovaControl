@@ -148,10 +148,14 @@ class IntentEngine:
         return True
 
     def _execute(self, intent: Event) -> None:
-        if intent.name == "CURSOR_MOVE" and self._last_point:
-            x, y = self._last_point
+        if intent.name == "CURSOR_MOVE":
+            x = intent.meta.get("x_norm")
+            y = intent.meta.get("y_norm")
+            if x is None or y is None:
+                if self._last_point:
+                    x, y = self._last_point
             if x is not None and y is not None:
-                self.mouse.move_absolute_norm(x, y)
+                self.mouse.move_absolute_norm(x, y, source=intent.meta.get("source"))
         elif intent.name == "CLICK":
             self.mouse.click()
         elif intent.name == "DOUBLE_CLICK":
