@@ -145,7 +145,7 @@ def calibrate(camera_index: int | None, output: Path) -> None:
     try:
         for key, label in POINTS_ORDER:
             print(f"Calibrating {key}... Look at target, show OPEN PALM to capture.")
-            x, y = capture_samples(duration=1.2, cap=cap, gaze=gaze, hand=hand, label=label)
+            x, y = capture_samples(cap=cap, gaze=gaze, hand=hand, label=label)
             results[key] = {"x": x, "y": y}
             img = frame_black(cap)
             img = cv2.putText(
