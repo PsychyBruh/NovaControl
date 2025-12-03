@@ -66,11 +66,24 @@ def open_camera(preferred: int | None) -> cv2.VideoCapture:
     return cap
 
 
-def capture_samples(duration: float, cap, gaze: GazeTracker, hand: HandTracker, label: str) -> Tuple[float, float]:
+def capture_samples(
+    cap,
+    gaze: GazeTracker,
+    hand: HandTracker,
+    label: str,
+    wait_timeout: float = 12.0,
+    capture_duration: float = 1.0,
+    stable_frames: int = 5,
+) -> Tuple[float, float]:
+    """
+    Waits for an OPEN_PALM to start capture, then collects gaze samples for capture_duration.
+    """
     samples_x = []
     samples_y = []
-    start = time.time()
-    while time.time() - start < duration:
+    wait_start = time.time()
+    stable = 0
+
+    while time.time() - wait_start < wait_timeout:
         ok, frame = cap.read()
         if not ok:
             break
@@ -78,26 +91,46 @@ def capture_samples(duration: float, cap, gaze: GazeTracker, hand: HandTracker, 
         g_res = gaze.process(frame)
         h_res = hand.process(frame)
 
-        cv2.putText(
-            frame,
-            f"{label} | Hold OPEN PALM to capture",
-            (20, 40),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (0, 255, 0),
-            2,
-            cv2.LINE_AA,
-        )
+        msg = f"{label} | Show OPEN PALM to start capture"
+        cv2.putText(frame, msg, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2, cv2.LINE_AA)
         cv2.imshow("Screen Gaze Calibration", frame)
         if cv2.waitKey(1) & 0xFF in (27, ord("q")):
             break
 
         if h_res.gesture == "OPEN_PALM":
-            if g_res.ratio is not None and g_res.landmarks:
-                samples_x.append(g_res.ratio)
-                v = vertical_from_landmarks(g_res.landmarks)
-                if v is not None:
-                    samples_y.append(v)
+            stable += 1
+        else:
+            stable = 0
+
+        if stable >= stable_frames:
+            # Begin capture window
+            capture_start = time.time()
+            while time.time() - capture_start < capture_duration:
+                ok, frame2 = cap.read()
+                if not ok:
+                    break
+                frame2 = cv2.flip(frame2, 1)
+                g2 = gaze.process(frame2)
+                if g2.ratio is not None and g2.landmarks:
+                    samples_x.append(g2.ratio)
+                    v = vertical_from_landmarks(g2.landmarks)
+                    if v is not None:
+                        samples_y.append(v)
+                cv2.putText(
+                    frame2,
+                    f"Capturing {label}...",
+                    (20, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 255, 255),
+                    2,
+                    cv2.LINE_AA,
+                )
+                cv2.imshow("Screen Gaze Calibration", frame2)
+                if cv2.waitKey(1) & 0xFF in (27, ord("q")):
+                    break
+            break
+
     if not samples_x or not samples_y:
         return 0.5, 0.5
     return sum(samples_x) / len(samples_x), sum(samples_y) / len(samples_y)

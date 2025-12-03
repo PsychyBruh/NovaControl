@@ -27,5 +27,7 @@ logs/
 
 # OS
 .DS_Store
+calibrate_gaze.json
+calibrate_screen_gaze.json
 Thumbs.db
 
